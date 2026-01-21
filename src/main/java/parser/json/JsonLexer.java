@@ -50,13 +50,37 @@ public class JsonLexer {
                 tokens.add(new JsonToken(JsonTokenType.COMMA, ","));
 
                 position++;
-            }  else {
+            } else if (currentChar == 't') {
+
+                tokens.add(readLiteralToken("true", JsonTokenType.BOOLEAN));
+            } else if (currentChar == 'f') {
+
+                tokens.add(readLiteralToken("false", JsonTokenType.BOOLEAN));
+            } else if (currentChar == 'n') {
+
+                tokens.add(readLiteralToken("null", JsonTokenType.NULL));
+            } else {
                 throw new RuntimeException("Unexpected character: " + currentChar);
             }
         }
         tokens.add(new JsonToken(JsonTokenType.EOF, ""));
 
         return tokens;
+    }
+
+    private JsonToken readLiteralToken(String literal, JsonTokenType type) {
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < literal.length(); i++) {
+            if (position < input.length() && input.charAt(position) == literal.charAt(i)) {
+                sb.append(input.charAt(position));
+                position++;
+            } else {
+                throw new RuntimeException("Invalid literal: expected " + literal);
+            }
+        }
+
+        return new JsonToken(type, sb.toString());
     }
 
     private JsonToken readStringToken() {
