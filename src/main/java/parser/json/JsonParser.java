@@ -1,9 +1,8 @@
 package parser.json;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import parser.json.node.*;
+
 import java.util.List;
-import java.util.Map;
 
 public class JsonParser {
     private final List<JsonToken> tokens;
@@ -13,7 +12,7 @@ public class JsonParser {
         this.tokens = tokens;
     }
 
-    public Object parse() {
+    public JsonNode parse() {
         JsonToken token = peek();
 
         if (token.getType() == JsonTokenType.LEFT_CURLY_BRACE) {
@@ -24,20 +23,20 @@ public class JsonParser {
             return parseArray();
         } else if (token.getType() == JsonTokenType.STRING) {
 
-            return consume().getValue();
+            return new JsonStringNode(consume().getValue());
         } else if (token.getType() == JsonTokenType.NUMBER) {
 
-            return consume().getValue();
+            return new JsonNumberNode(consume().getValue());
         } else if (token.getType() == JsonTokenType.BOOLEAN) {
 
-            return consume().getValue();
+            return new JsonBooleanNode(consume().getValue());
         }
 
         throw new RuntimeException("알 수 없는 토큰 타입: " + token.getType());
     }
 
-    public Map<String, Object> parseObject() {
-        Map<String, Object> map = new LinkedHashMap<>();
+    public JsonObjectNode parseObject() {
+        JsonObjectNode node = new JsonObjectNode();
 
         consume();
 
@@ -49,37 +48,36 @@ public class JsonParser {
                     consume();
                 }
 
-                map.put(key, parse());
+                node.addChildren(key, parse());
             } else if (tokens.get(current).getType() == JsonTokenType.COMMA) {
                 consume();
             } else {
-                consume();
+                throw new RuntimeException("쉼표나 키값이 필요합니다");
             }
         }
 
         consume();
 
-        return map;
+        return node;
     }
 
-    public List<Object> parseArray() {
-        List<Object> list = new ArrayList<>();
+    public JsonArrayNode parseArray() {
+        JsonArrayNode node = new JsonArrayNode();
 
         consume();
 
         while (peek().getType() != JsonTokenType.RIGHT_BRACKET) {
-            if (peek().getType() == JsonTokenType.STRING) {
-                list.add(parse());
-            } else if (peek().getType() == JsonTokenType.COMMA) {
+
+            if (peek().getType() == JsonTokenType.COMMA) {
                 consume();
             } else {
-                list.add(parse());
+                node.addElement(parse());
             }
         }
 
         consume();
 
-        return list;
+        return node;
     }
 
     private JsonToken consume() {
