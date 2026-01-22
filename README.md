@@ -173,7 +173,7 @@ public class Main {
 ## ✅ Expected Output
 ```text
 === [Step 1] Raw Input ===
-{"title": "Parser Project","tags": ["learning", "java"],"contributors": [{ "name": "홍길동", "role": "developer" },{ "name": "Gemini", "role": "helper" }],"completed": true,"version": 1.0}
+{"title": "Parser Project","tags": ["learning", "java"],"contributors": [{ "name": "홍길동", "role": "developer" },{ "name": "Assistant", "role": "helper" }],"completed": true,"version": 1.0}
 
 === [Step 2] AST Generated ===
 Root Node Type: JsonObjectNode
