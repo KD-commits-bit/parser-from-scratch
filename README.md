@@ -54,16 +54,13 @@ JSON은 단순해 보이지만,
 ---
 
 ## 🛠 Parser Architecture (공통 구조)
+> 본 파서는 문법 오류 발생 시 현재 토큰 위치를 기준으로 한 예외 메시지를 반환하도록 설계되었습니다.
 
-본 프로젝트는 포맷별 구현과 무관하게 다음과 같은 공통 파서 흐름을 따릅니다.
+본 프로젝트는 포맷별 구현과 무관하게 다음과 같은 공통 데이터 처리 파이프라인을 따릅니다.
 
-1. **Pointer 기반 입력 처리**
-2. **Token Stream 생성**
-3. **Recursive Descent Parsing**
-4. **구조화된 Java 객체로 변환**
-
-이 구조를 유지한 채,  
-각 데이터 포맷은 **Grammar 및 Token 정의만 분리하여 구현**하는 방식을 지향합니다.
+1. **Lexical Analysis**: 입력 문자열을 포인터 기반으로 탐색하여 Token Stream 생성
+2. **Syntactic Analysis**: 토큰 스트림을 읽어 문법적 구조를 가진 AST Node 생성
+3. **AST Traversal**: 완성된 트리를 순회하며 최종적인 Java Native 객체로 변환
 
 ---
 
@@ -71,24 +68,19 @@ JSON은 단순해 보이지만,
 
 ### 1. Lexical Analysis (Tokenizing)
 
-- 입력 문자열을 **단 한 번의 순회(O(n))** 로 처리하기 위해  
-  포인터 기반 탐색 방식을 사용했습니다.
-- 상태 기반 분기 로직을 통해 다음 토큰을 구분합니다.
-    - 구조 토큰: `{ } [ ] : ,`
-    - 값 토큰: `STRING`, `NUMBER`
-    - 리터럴 토큰: `true`, `false`, `null`
-
-> Lexer 단계에서는 문법 해석을 수행하지 않고,  
-> 오직 의미 있는 최소 단위(Token)로 분리하는 역할만 담당합니다.
+- **O(n) 탐색**: 단 한 번의 순회로 모든 토큰을 추출합니다.
+- **상태 기반 분기**: 구조 토큰({, [, :, ,)과 값 토큰(STRING, NUMBER, BOOLEAN, NULL)을 구분합니다.
 
 ---
 
 ### 2. Recursive Descent Parsing
 
-- JSON의 계층적 구조를 처리하기 위해 **재귀 하향 파싱**을 채택했습니다.
+- **재귀 하향 파싱**: JSON의 무한 중첩 구조를 처리하기 위해 파서가 자기 자신을 호출하는 구조를 채택했습니다.
 
-- 토큰 포인터(`current`)를 기준으로 토큰을 소비(consume)하며  
-  파서가 자기 자신을 다시 호출함으로써 **무한 중첩 구조**를 처리합니다.
+- **AST Node 설계**: 데이터를 즉시 변환하지 않고 JsonNode 인터페이스를 거쳐 구조화함으로써 관심사를 분리했습니다.
+
+  - JsonObjectNode, JsonArrayNode: 컨테이너 역할 및 자식 노드 관리 
+  - JsonValueNode: 실제 데이터 타입 변환(Double, Long, Boolean 등) 담당
 
 ---
 
@@ -107,7 +99,8 @@ JSON은 단순해 보이지만,
     - `true`, `false`, `null` 리터럴 인식
 - [x] Recursive Object & Array Parsing
     - 재귀 하향 파싱을 통한 중첩 구조 처리
-- [ ] AST 기반 객체 변환
+- [x] AST 기반 객체 변환
+    - `asJavaObject()` 메서드를 통한 AST 노드 전역 순회 및 최종 결과물(Map/List) 생성
 
 ---
 
@@ -119,37 +112,78 @@ JSON은 단순해 보이지만,
 
 ## 💻 Usage Example (JSON)
 
-아래 예시는 JSON 문자열을 입력으로 받아  
-Lexer → Parser 과정을 거쳐 Java 객체(`Map`, `List`)로 변환하는 흐름을 보여줍니다.
+위 예제는 입력된 JSON 문자열이 단순히 Map으로 캐스팅되는 것이 아니라   
+**[Lexer → Parser → AST 생성 → Java Object 변환]** 의 정밀한 파이프라인을 거치는 과정을 보여줍니다.  
+특히 최종 출력에서 확인되듯이, 문자열이었던 "1.0"과 "true"가 각각 Java의 **Double**과 Boolean 타입으로 정확히 복원되는 것이  
+본 프로젝트의 핵심인 **'타입 정교화(Type Refinement)'** 의 결과입니다.
 
 ```java
 public class Main {
     public static void main(String[] args) {
+        // 1. 입력 데이터 (Input)
         String jsonInput = "{" +
             "\"title\": \"Parser Project\"," +
             "\"tags\": [\"learning\", \"java\"]," +
             "\"contributors\": [" +
             "{ \"name\": \"홍길동\", \"role\": \"developer\" }," +
-            "{ \"name\": \"Gemini\", \"role\": \"helper\" }" +
+            "{ \"name\": \"Assistant\", \"role\": \"helper\" }" +
             "]," +
-            "\"completed\": true" +
+            "\"completed\": true," +
+            "\"version\": 1.0" + // 숫자 타입 테스트용 추가
             "}";
 
-        JsonLexer lexer = new JsonLexer(jsonInput);
-        List<JsonToken> tokens = lexer.tokenize();
+        System.out.println("=== [Step 1] Raw Input ===");
+        System.out.println(jsonInput);
 
-        JsonParser parser = new JsonParser(tokens);
-        Object result = parser.parse();
+        try {
+            // 2. 어휘 분석 (Lexing)
+            JsonLexer lexer = new JsonLexer(jsonInput);
+            List<JsonToken> tokens = lexer.tokenize();
 
-        System.out.println(result);
+            // 3. 구문 분석 및 AST 생성 (Parsing)
+            JsonParser parser = new JsonParser(tokens);
+            JsonNode astRoot = parser.parse();
+
+            System.out.println("\n=== [Step 2] AST Generated ===");
+            System.out.println("Root Node Type: " + astRoot.getClass().getSimpleName());
+
+            // 4. 최종 객체 변환 (Transformation)
+            // AST 트리를 순회하며 Java Native Object(Map, List 등)로 변환합니다.
+            Object result = astRoot.asJavaObject();
+
+            System.out.println("\n=== [Step 3] Final Output (Java Object) ===");
+            System.out.println(result);
+
+            if (result instanceof java.util.Map) {
+                System.out.println("\n✅ 성공: JSON 데이터가 Java Map 구조로 정상 변환되었습니다.");
+
+                // 데이터 타입 검증 예시 (피드백 반영)
+                java.util.Map<?, ?> resultMap = (java.util.Map<?, ?>) result;
+                System.out.println("검증 - 'completed' 타입: " + resultMap.get("completed").getClass().getSimpleName());
+                System.out.println("검증 - 'version' 타입: " + resultMap.get("version").getClass().getSimpleName());
+            }
+
+        } catch (Exception e) {
+            System.err.println("\n❌ 파싱 중 오류 발생: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
 ```
 ## ✅ Expected Output
 ```text
---- 파싱 결과 ---
-{title=Parser Project, tags=[learning, java], contributors=[{name=홍길동, role=developer}, {name=Gemini, role=helper}], completed=true}
-성공: 객체(Map)로 분석되었습니다.
+=== [Step 1] Raw Input ===
+{"title": "Parser Project","tags": ["learning", "java"],"contributors": [{ "name": "홍길동", "role": "developer" },{ "name": "Gemini", "role": "helper" }],"completed": true,"version": 1.0}
+
+=== [Step 2] AST Generated ===
+Root Node Type: JsonObjectNode
+
+=== [Step 3] Final Output (Java Object) ===
+{title=Parser Project, tags=[learning, java], contributors=[{name=홍길동, role=developer}, {name=Gemini, role=helper}], completed=true, version=1.0}
+
+✅ 성공: JSON 데이터가 Java Map 구조로 정상 변환되었습니다.
+검증 - 'completed' 타입: Boolean
+검증 - 'version' 타입: Double
 ```
 
 ### 🚀 Challenges & Learnings
@@ -158,3 +192,6 @@ public class Main {
 - **Recursive Descent Parsing**  
   중첩된 JSON 객체와 배열을 처리하기 위해 파서가 자기 자신을 다시 호출하는 '재귀' 구조를 설계했습니다.  
   이 과정에서 토큰 포인터(current)가 정확한 위치를 유지하도록 소비(Consume) 로직을 정교화하는 데 집중했습니다.
+- **Separation of Concerns**  
+  처음에는 파서 내부에 변환 로직이 섞여 있었으나 AST(추상 구문 트리) 구조를 도입하여 '구조 해석'과 '데이터 변환'의 책임을 분리했습니다.  
+  이를 통해 더 객체지향적이고 확장성 있는 코드를 작성할 수 있었습니다.

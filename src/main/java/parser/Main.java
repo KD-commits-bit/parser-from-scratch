@@ -15,7 +15,7 @@ public class Main {
             "\"tags\": [\"learning\", \"java\"]," +
             "\"contributors\": [" +
             "{ \"name\": \"홍길동\", \"role\": \"developer\" }," +
-            "{ \"name\": \"Gemini\", \"role\": \"helper\" }" +
+            "{ \"name\": \"Assistant\", \"role\": \"helper\" }" +
             "]," +
             "\"completed\": true," +
             "\"version\": 1.0" + // 숫자 타입 테스트용 추가
